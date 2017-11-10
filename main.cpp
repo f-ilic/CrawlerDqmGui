@@ -4,13 +4,19 @@
 #include <regex>
 #include <stdio.h>
 
-#include "dependencies/curl/include/curl/curl.h"
+#include <curl/curl.h>
 
 using namespace std;
 
 struct config {
-    string certificate_path = "/home/fil/Documents/usercert.pem";
-    string key_path         = "/home/fil/Documents/userkey.pem";
+
+    config(const char* cert, const char* key) { 
+	this->certificate_path = string(cert);
+	this->key_path         = string(key);
+    }
+
+    string certificate_path;
+    string key_path;
 
     void printDebug() {
         cout << "Certificate: " << certificate_path << endl;
@@ -212,7 +218,7 @@ void update_online(CURL* curl, const string& url, const string& file_path) {
 
 int main(int argc, char *argv[])
 {
-    config cfg;
+    config cfg("./data/proxy.cert", "./data/proxy.cert");
     CURL* curl;
 
     curl_global_init(CURL_GLOBAL_ALL);
@@ -227,7 +233,7 @@ int main(int argc, char *argv[])
 
     vector<string> l1;
     crawl_root_files_recursive(curl, "https://cmsweb.cern.ch/dqm/relval/data/browse/", l1);
-    vector_to_file(l1, "/home/fil/projects/CrawlerDqmGui/relval.txt");
+    vector_to_file(l1, "./data/relval.txt");
 
 //    update_online(curl, "https://cmsweb.cern.ch/dqm/online/data/browse/Original", "/home/fil/projects/CrawlerDqmGui/online.txt");
 
