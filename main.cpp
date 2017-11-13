@@ -8,23 +8,7 @@
 
 using namespace std;
 
-struct config {
-
-    config(const char* cert, const char* key) { 
-	this->certificate_path = string(cert);
-	this->key_path         = string(key);
-    }
-
-    string certificate_path;
-    string key_path;
-
-    void printDebug() {
-        cout << "Certificate: " << certificate_path << endl;
-        cout << "Key        : " << key_path << endl;
-    }
-};
-
-static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
+static size_t writeCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
     ((string*)userp)->append((char*)contents, size * nmemb);
     return size * nmemb;
@@ -215,29 +199,87 @@ void update_online(CURL* curl, const string& url, const string& file_path) {
     cout << " Done!" << endl;
 }
 
+void printUsage() {
+    cout << "Invalid parameters\nUsagee:" << endl;
+    cout << "\t* ./CrawlDqmGui crawl-online   <filename>" << endl;
+    cout << "\t* ./CrawlDqmGui crawl-offline  <filename>" << endl;
+    cout << "\t* ./CrawlDqmGui crawl-relval   <filename>" << endl;
+    cout << "\t* ./CrawlDqmGui update-online  <filename>" << endl;
+    cout << "\t* ./CrawlDqmGui update-offline <filename>" << endl;
+    cout << "\t* ./CrawlDqmGui update-relval  <filename>" << endl;
+}
+
+	
+
+bool fileExists (const string& name) {
+    ifstream f(name);
+    return f.good();
+}
+
 
 int main(int argc, char *argv[])
 {
-    config cfg("./data/proxy.cert", "./data/proxy.cert");
+    if(argc!=3) {
+        printUsage();
+	return 1; 
+    }	
+
+    string url_to_crawl;
+    string cmd(argv[1]);
+    if(cmd == "crawl-online" || cmd == "update-online") {
+	url_to_crawl = "https://cmsweb.cern.ch/dqm/online/data/browse/";
+    } else if(cmd == "crawl-offline" || cmd == "update-offline")  {
+	url_to_crawl = "https://cmsweb.cern.ch/dqm/offline/data/browse/";
+    } else if(cmd == "crawl-relval" || cmd == "update-relval")   {
+	url_to_crawl = "https://cmsweb.cern.ch/dqm/relval/data/browse/";
+    } else {
+	printUsage();
+	return 1;
+    }
+    
+    string file_name(argv[2]); 
+
+    bool is_update_mode = (cmd=="update-online" || cmd =="update-offline" || cmd=="update-relval");
+    if(!fileExists(file_name) && is_update_mode) { 
+	cout << "Cannot call update on non existing file" << endl;
+	return 1;
+    }
+
+    if(fileExists(file_name) && !is_update_mode) {
+	cout << "You are about to override the file: " << file_name << endl;
+	cout << "Continue [N/y]";
+	
+	char answer;
+	cin >> answer;
+	if (!(answer == 'y' || answer == 'Y' )) {
+	    return 1;
+	}
+    }
+
     CURL* curl;
 
     curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
-
+    
     curl_easy_setopt(curl, CURLOPT_SSLCERTTYPE, "PEM");
-    curl_easy_setopt(curl, CURLOPT_SSLCERT, cfg.certificate_path.c_str());
-    curl_easy_setopt(curl, CURLOPT_SSLKEY, cfg.key_path.c_str());
+    curl_easy_setopt(curl, CURLOPT_SSLCERT, "./data/proxy.cert");
+    curl_easy_setopt(curl, CURLOPT_SSLKEY, "./data/proxy.cert");
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
 
-    vector<string> l1;
-    crawl_root_files_recursive(curl, "https://cmsweb.cern.ch/dqm/relval/data/browse/", l1);
-    vector_to_file(l1, "./data/relval.txt");
-
-//    update_online(curl, "https://cmsweb.cern.ch/dqm/online/data/browse/Original", "/home/fil/projects/CrawlerDqmGui/online.txt");
+    if(is_update_mode && cmd=="update-online") { 	
+	update_online(curl, url_to_crawl, file_name);
+	cout << "Finished updating " << file_name << " from " << url_to_crawl << endl;
+    } else {
+        vector<string> out_vec;
+        crawl_root_files_recursive(curl, url_to_crawl, out_vec);
+        vector_to_file(out_vec, file_name);
+	cout << "Finished creating " << file_name << " from " << url_to_crawl << endl;
+    }
 
     curl_easy_cleanup(curl);
     curl_global_cleanup();
     return 0;
 }
+
